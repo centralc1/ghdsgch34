@@ -20,12 +20,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    if (!phone) {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Telefone é obrigatório" 
-      }, { status: 400 })
-    }
+    // Telefone não é mais obrigatório
 
     console.log("[FreePay] Creating PIX payment:", { cpf, name, phone, amount })
 
@@ -35,11 +30,11 @@ export async function POST(request: NextRequest) {
     // Limpar CPF (remover formatação)
     const cpfLimpo = cpf.replace(/\D/g, '')
     
-    // Limpar telefone (remover formatação)
-    const phoneLimpo = phone.replace(/\D/g, '')
+    // Limpar telefone (remover formatação) - tratar se vazio
+    const phoneLimpo = phone ? phone.replace(/\D/g, '') : ''
     
     // Usar o valor fornecido ou o padrão
-    const finalAmount = amount || 199.93
+    const finalAmount = amount || 248.21
     const amountInCents = Math.round(finalAmount * 100)
 
     const url = 'https://api.freepaybr.com/functions/v1/transactions'
@@ -82,10 +77,12 @@ export async function POST(request: NextRequest) {
         source: 'FreePay-Integration',
         timestamp: new Date().toISOString()
       }),
-      postbackUrl: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://your-domain.com'}/api/freepay-webhook`
+      postbackUrl: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://e34asd.netlify.app'}/api/freepay-webhook`
     }
 
     console.log("[FreePay] Payload:", payload)
+    console.log("[FreePay] Webhook URL:", `${process.env.NEXT_PUBLIC_BASE_URL || 'https://e34asd.netlify.app'}/api/freepay-webhook`)
+    console.log("[FreePay] Credentials:", { secretKey: credentials.secretKey.substring(0, 20) + "...", companyId: credentials.companyId })
 
     const response = await fetch(url, {
       method: 'POST',

