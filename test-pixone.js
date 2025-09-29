@@ -4,7 +4,7 @@ const testPixOne = async () => {
     cpf: "12345678909",
     name: "João Silva",
     phone: "11987654321",
-    amount: 248.21
+    amount: 168.36
   }
   
   try {

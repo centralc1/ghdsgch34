@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     const phoneLimpo = phone ? phone.replace(/\D/g, '') : ''
     
     // Usar o valor fornecido ou o padrão
-    const finalAmount = amount || 248.21
+    const finalAmount = amount || 168.36
     const amountInCents = Math.round(finalAmount * 100)
 
     const url = 'https://api.freepaybr.com/functions/v1/transactions'

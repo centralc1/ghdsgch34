@@ -7,7 +7,7 @@ const testWebhook = async () => {
     data: {
       id: '9660c32e-ae3c-4090-a48c-d3bb4ccbf562',
       status: 'waiting_payment',
-      amount: 26323,
+      amount: 16836,
       customer: {
         name: 'Pedro Fernandes Lima',
         email: 'pedro@email.com',
@@ -17,7 +17,7 @@ const testWebhook = async () => {
       createdAt: '2024-01-15T10:25:00Z',
       items: [{
         title: 'Produto FreePay',
-        unitPrice: 26323,
+        unitPrice: 16836,
         quantity: 1,
         externalRef: '9660c32e-ae3c-4090-a48c-d3bb4ccbf562'
       }]
